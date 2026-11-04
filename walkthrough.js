@@ -6,10 +6,10 @@ let current = null, pending = null, busy = false, failed = null, serial = 0;
 let lastAzimuth = null, lastFov = null, noticeTimer, loadStarted, preloadTimer = null;
 const preloads = new Map();
 
-const quality = () => $('quality') ? $('quality').value : '4096';
+const quality = () => '4096';
 
 function panoUrl(station) {
-  return data.imageTemplate.replace('{file}', encodeURIComponent(station.file)).replace('{width}', quality());
+  return data.imageTemplate.replace('{file}', encodeURIComponent(station.file)).replace('{width}', '4096');
 }
 
 function notify(message, duration = 0) {
