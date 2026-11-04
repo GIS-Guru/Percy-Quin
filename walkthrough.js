@@ -30,17 +30,23 @@ function controls() {
   document.body.classList.toggle('loading', busy);
 }
 
-function preload(station) {
+function preload(station, isUserNavigation = false) {
   if (!station) return Promise.resolve();
   const url = panoUrl(station);
-  if (preloads.has(url)) return preloads.get(url);
+  if (preloads.has(url)) {
+    const existing = preloads.get(url);
+    if (!existing.failed) return existing.promise;
+    preloads.delete(url);
+  }
 
+  const timeoutMs = isUserNavigation ? 35000 : 15000;
+  let timer;
   const promise = new Promise((resolve, reject) => {
     const img = new Image();
-    const timer = setTimeout(() => {
+    timer = setTimeout(() => {
       img.src = '';
       reject(Error('Image request timed out'));
-    }, 15000);
+    }, timeoutMs);
     img.onload = () => {
       clearTimeout(timer);
       resolve(url);
@@ -52,9 +58,13 @@ function preload(station) {
     img.src = url;
   });
 
-  preloads.set(url, promise);
-  promise.catch(() => preloads.delete(url));
-  // Keep memory bounded to 8 preloaded items
+  const entry = { promise, failed: false };
+  promise.catch(() => {
+    entry.failed = true;
+    preloads.delete(url);
+  });
+  preloads.set(url, entry);
+
   while (preloads.size > 8) {
     preloads.delete(preloads.keys().next().value);
   }
@@ -63,30 +73,15 @@ function preload(station) {
 
 function schedulePreload(stationId) {
   clearTimeout(preloadTimer);
+  // Delay background preloading by 1500ms so map tiles and active view have 100% network priority
   preloadTimer = setTimeout(() => {
-    const links = graph.get(stationId) || [];
-    for (const id of links) {
-      const target = byId.get(id);
-      if (target) preload(target).catch(() => {});
+    // Only prefetch the single next forward station
+    const index = current ? stations.indexOf(current) : -1;
+    if (index >= 0) {
+      const next = sequentialTarget(stations, graph, index, 1);
+      if (next) preload(next, false).catch(() => {});
     }
-  }, 300);
-}
-
-function pruneScenes(currentId) {
-  if (!viewer) return;
-  try {
-    const neighbors = new Set(graph.get(currentId) || []);
-    neighbors.add(currentId);
-    const cfg = viewer.getConfig();
-    const scenes = cfg && cfg.scenes ? cfg.scenes : {};
-    for (const id of Object.keys(scenes)) {
-      if (!neighbors.has(id)) {
-        viewer.removeScene(id);
-      }
-    }
-  } catch (err) {
-    // Graceful fallback if removeScene unsupported
-  }
+  }, 1500);
 }
 
 function hotspots(station) {
@@ -131,22 +126,27 @@ function scene(station) {
   };
 }
 
+function updateCone(st, yawDeg = 0, fovDeg = 105) {
+  if (!cone || !st) return;
+  const az = wrap((st.heading || 0) + yawDeg);
+  const r = Math.PI / 180, radius = 45, points = [[st.lat, st.lon]];
+  for (let i = 0; i <= 12; i++) {
+    const a = (az - fovDeg / 2 + fovDeg * i / 12) * r;
+    points.push([
+      st.lat + radius * Math.cos(a) / 111320,
+      st.lon + radius * Math.sin(a) / (111320 * Math.cos(st.lat * r))
+    ]);
+  }
+  cone.setLatLngs(points);
+}
+
 function syncMap() {
   if (!viewer || !current || busy || !viewer.isLoaded()) return;
   const az = wrap(current.heading + viewer.getYaw()), fov = viewer.getHfov();
   if (lastAzimuth !== null && Math.abs(wrap(az - lastAzimuth)) < 0.3 && Math.abs(fov - lastFov) < 0.3) return;
   lastAzimuth = az;
   lastFov = fov;
-
-  const r = Math.PI / 180, radius = 45, points = [[current.lat, current.lon]];
-  for (let i = 0; i <= 12; i++) {
-    const a = (az - fov / 2 + fov * i / 12) * r;
-    points.push([
-      current.lat + radius * Math.cos(a) / 111320,
-      current.lon + radius * Math.sin(a) / (111320 * Math.cos(current.lat * r))
-    ]);
-  }
-  if (cone) cone.setLatLngs(points);
+  updateCone(current, viewer.getYaw(), fov);
 }
 
 function finish() {
@@ -163,8 +163,11 @@ function finish() {
     panoEl.dataset.transitionMs = String(Math.round(performance.now() - loadStarted));
   }
 
-  if (marker) marker.setLatLng([current.lat, current.lon]);
-  if (map && marker && !map.getBounds().pad(-0.15).contains(marker.getLatLng())) {
+  if (marker) {
+    marker.setLatLng([current.lat, current.lon]);
+    marker.bringToFront();
+  }
+  if (map && marker && !map.getBounds().pad(-0.1).contains(marker.getLatLng())) {
     map.panTo(marker.getLatLng(), {animate: true});
   }
 
@@ -187,10 +190,10 @@ function finish() {
   const links = graph.get(current.id) || [];
   notify(links.length < 2 ? 'End of this recorded section. Use the map to explore another section.' : '', links.length < 2 ? 6500 : 0);
 
-  // Free WebGL GPU textures from previously visited scenes to prevent VRAM memory leak and stalls
-  pruneScenes(current.id);
+  // Invalidate map size so newly visible tiles render immediately
+  if (map) map.invalidateSize();
 
-  // Debounced background preloading for adjacent views
+  // Schedule debounced preloading of only the single next station
   schedulePreload(current.id);
 }
 
@@ -201,22 +204,36 @@ function fail(error) {
   pending = null;
   controls();
   if ($('retry')) $('retry').hidden = false;
-  notify('This view could not load. Try again or choose another map point.');
+  notify('This view could not load. Try again or choose another map point.', 6000);
 }
 
 async function go(target, {initial = false, reset = false, view = null} = {}) {
-  if (!target || busy) return;
+  if (!target) return;
+  if (busy && pending === target) return;
+
   busy = true;
   pending = target;
   controls();
   if ($('retry')) $('retry').hidden = true;
 
+  // Immediate map feedback: move marker and cone right away on user click
+  if (marker) {
+    marker.setLatLng([target.lat, target.lon]);
+    marker.bringToFront();
+  }
+  if (map) {
+    if (!map.getBounds().pad(-0.1).contains([target.lat, target.lon])) {
+      map.panTo([target.lat, target.lon], {animate: true, duration: 0.35});
+    }
+  }
+  updateCone(target, viewer ? viewer.getYaw() : 0, viewer ? viewer.getHfov() : 105);
+
   const token = ++serial;
   loadStarted = performance.now();
-  const loadingTimer = setTimeout(() => notify('Opening view…'), 250);
+  const loadingTimer = setTimeout(() => notify('Opening view…'), 300);
 
   try {
-    await preload(target);
+    await preload(target, true);
     if (token !== serial) return;
     clearTimeout(loadingTimer);
 
@@ -270,10 +287,13 @@ function step(direction) {
 function initMap() {
   map = L.map('map', {zoomControl: false, attributionControl: true}).setView([data.initialView.lat, data.initialView.lon], 17);
 
-  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+  L.tileLayer('https://services.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
     maxNativeZoom: 19,
     maxZoom: 21,
-    attribution: 'Tiles © Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community'
+    attribution: 'Tiles © Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community',
+    keepBuffer: 4,
+    updateWhenIdle: false,
+    updateWhenZooming: false
   }).addTo(map);
 
   L.control.zoom({position: 'bottomright'}).addTo(map);
@@ -292,12 +312,15 @@ function initMap() {
   const renderer = L.canvas({padding: 0.5});
   stations.forEach(s => L.circleMarker([s.lat, s.lon], {
     renderer,
-    radius: 4,
+    radius: 4.5,
     color: '#ffffff',
-    weight: 1,
+    weight: 1.2,
     fillColor: '#4c91a2',
     fillOpacity: 1
-  }).bindTooltip('Explore here').on('click', () => go(s)).addTo(map));
+  }).bindTooltip(`Station ${s.take3Num || s.id}`, {direction: 'top', offset: [0, -4]}).on('click', (e) => {
+    L.DomEvent.stopPropagation(e);
+    go(s);
+  }).addTo(map));
 
   cone = L.polygon([], {color: '#f0c56f', weight: 1, fillOpacity: 0.35, interactive: false}).addTo(map);
   marker = L.circleMarker([data.initialView.lat, data.initialView.lon], {
@@ -308,6 +331,15 @@ function initMap() {
     fillColor: '#f0b958',
     fillOpacity: 1
   }).addTo(map);
+
+  // Immediately draw active cone and marker from frame 0
+  updateCone(data.initialView, 0, data.initialView.fov_deg || 105);
+  marker.bringToFront();
+
+  // Invalidate map size multiple times to ensure full viewport fill inside iframes & grid containers
+  requestAnimationFrame(() => map && map.invalidateSize());
+  setTimeout(() => map && map.invalidateSize(), 200);
+  setTimeout(() => map && map.invalidateSize(), 800);
 }
 
 function shareUrl() {

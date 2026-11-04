@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <title>Percy Quin 360 — Walking Trail 3</title>
+  <title>Percy Quin 360</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Segoe+UI:wght@400;600;700&display=swap" rel="stylesheet">
@@ -20,7 +20,6 @@
       <div class="brand-headings">
         <span class="eyebrow">EXPLORE AT YOUR OWN PACE</span>
         <h1>Percy Quin</h1>
-        <p>Walking Trail 3 <span>&bull;</span> 4D Surveying</p>
       </div>
     </div>
   </header>
@@ -34,25 +33,23 @@
 
   <aside id="settings" hidden aria-label="Information and settings">
     <div class="panel-title">
-      <h2>Your walk</h2>
+      <h2>Settings</h2>
       <button id="close-settings" aria-label="Close settings">×</button>
     </div>
-    <p>Drag to look around. Select a ground arrow to walk. Select a point on the map to explore another section.</p>
-    <p>Use W / S or the Back / Forward buttons to step along the recorded route.</p>
-    <label>Picture detail
+    <p class="settings-hint">Drag to look around &bull; Use arrows, W/S keys, or map to navigate.</p>
+    <label>Detail
       <select id="quality">
-        <option value="4096">Fast</option>
+        <option value="4096">4K (Fast)</option>
         <option value="8192">High detail</option>
       </select>
     </label>
     <label class="check"><input type="checkbox" id="survey"> Show surveyed trail</label>
-    <button id="overview">Show the whole trail</button>
+    <button id="overview">Show full trail</button>
     <details>
-      <summary>Image information</summary>
+      <summary>Station info</summary>
       <p id="image-info"></p>
     </details>
-    <p class="small">Photographed March 2025. Some recorded sections are separated by gaps; use the map to move between them.</p>
-    <label id="share-fallback" hidden>Copy this view’s link<input id="share-url" readonly></label>
+    <label id="share-fallback" hidden>Share view link<input id="share-url" readonly></label>
   </aside>
 
   <section id="map-panel" aria-label="Trail map">
