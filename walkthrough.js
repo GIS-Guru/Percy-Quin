@@ -273,41 +273,39 @@ function initMap() {
   L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
     maxNativeZoom: 19,
     maxZoom: 21,
-    attribution: 'Tiles © Esri'
+    attribution: 'Tiles © Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community'
   }).addTo(map);
 
   L.control.zoom({position: 'bottomright'}).addTo(map);
 
-  // 4D Theme: Tour route in vibrant blue #2196F3
+  // Original high-contrast map symbology on satellite imagery
   L.geoJSON(data.tourLines, {
     interactive: false,
-    style: {color: '#2196F3', weight: 3.5, opacity: 0.9}
+    style: {color: '#f0d69c', weight: 3, opacity: 0.9}
   }).addTo(map);
 
-  // Surveyed trail in 4D amber/gold #F58220
   surveyLayer = L.geoJSON(data.surveyedTrails, {
     interactive: false,
-    style: {color: '#F58220', weight: 2.5, dashArray: '6 6'}
+    style: {color: '#f5a75b', weight: 3, dashArray: '6 6'}
   });
 
   const renderer = L.canvas({padding: 0.5});
   stations.forEach(s => L.circleMarker([s.lat, s.lon], {
     renderer,
-    radius: 4.5,
+    radius: 4,
     color: '#ffffff',
-    weight: 1.2,
-    fillColor: '#2196F3',
+    weight: 1,
+    fillColor: '#4c91a2',
     fillOpacity: 1
-  }).bindTooltip(`Explore ${s.id}`).on('click', () => go(s)).addTo(map));
+  }).bindTooltip('Explore here').on('click', () => go(s)).addTo(map));
 
-  // 4D Theme: Cone and active marker in 4D Vibrant Orange #F58220
-  cone = L.polygon([], {color: '#F58220', weight: 1.5, fillOpacity: 0.3, interactive: false}).addTo(map);
+  cone = L.polygon([], {color: '#f0c56f', weight: 1, fillOpacity: 0.35, interactive: false}).addTo(map);
   marker = L.circleMarker([data.initialView.lat, data.initialView.lon], {
     interactive: false,
-    radius: 7.5,
+    radius: 7,
     color: '#ffffff',
-    weight: 2.5,
-    fillColor: '#F58220',
+    weight: 2,
+    fillColor: '#f0b958',
     fillOpacity: 1
   }).addTo(map);
 }
@@ -354,7 +352,7 @@ function bind() {
 
   const zoomFullTrail = () => {
     if (map && stations.length) {
-      map.fitBounds(L.latLngBounds(stations.map(s => [s.lat, s.lon])), {padding: [24, 24]});
+      map.fitBounds(L.latLngBounds(stations.map(s => [s.lat, s.lon])), {padding: [18, 18]});
     }
   };
   if ($('overview')) $('overview').onclick = zoomFullTrail;
@@ -368,15 +366,10 @@ function bind() {
       $('toggle-map').setAttribute('aria-label', collapsed ? 'Show map' : 'Hide map');
       $('toggle-map').setAttribute('aria-expanded', String(!collapsed));
     }
-    const mapPill = $('btn-toggle-map');
-    if (mapPill) {
-      mapPill.classList.toggle('active', !collapsed);
-    }
     setTimeout(() => map && map.invalidateSize(), 250);
   };
 
   if ($('toggle-map')) $('toggle-map').onclick = toggleMapAction;
-  if ($('btn-toggle-map')) $('btn-toggle-map').onclick = toggleMapAction;
 
   if ($('expand-map')) {
     $('expand-map').onclick = () => {
