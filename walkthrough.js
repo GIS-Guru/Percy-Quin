@@ -6,10 +6,11 @@ let current = null, pending = null, busy = false, failed = null, serial = 0;
 let lastAzimuth = null, lastFov = null, noticeTimer, loadStarted, preloadTimer = null;
 const preloads = new Map();
 
-const quality = () => '4096';
+const quality = () => $('quality')?.value || localStorage.getItem('pq_quality') || '2048';
 
 function panoUrl(station) {
-  return data.imageTemplate.replace('{file}', encodeURIComponent(station.file)).replace('{width}', '4096');
+  const q = quality();
+  return data.imageTemplate.replace('{file}', encodeURIComponent(station.file)).replace('{width}', q);
 }
 
 function notify(message, duration = 0) {
@@ -65,7 +66,7 @@ function preload(station, isUserNavigation = false) {
   });
   preloads.set(url, entry);
 
-  while (preloads.size > 8) {
+  while (preloads.size > 24) {
     preloads.delete(preloads.keys().next().value);
   }
   return promise;
@@ -73,15 +74,27 @@ function preload(station, isUserNavigation = false) {
 
 function schedulePreload(stationId) {
   clearTimeout(preloadTimer);
-  // Delay background preloading by 1500ms so map tiles and active view have 100% network priority
+  // Immediate predictive preloading: short 80ms microtask ensures the current scene renders first,
+  // then concurrently downloads next 2 forward stations and previous station in the background.
   preloadTimer = setTimeout(() => {
-    // Only prefetch the single next forward station
     const index = current ? stations.indexOf(current) : -1;
-    if (index >= 0) {
-      const next = sequentialTarget(stations, graph, index, 1);
-      if (next) preload(next, false).catch(() => {});
+    if (index < 0) return;
+
+    // 1. Next station ahead (highest probability of next click)
+    const next1 = sequentialTarget(stations, graph, index, 1);
+    if (next1) {
+      preload(next1, false).then(() => {
+        // 2. Two stations ahead once next1 is secured
+        const nextIdx = stations.indexOf(next1);
+        const next2 = sequentialTarget(stations, graph, nextIdx, 1);
+        if (next2) preload(next2, false).catch(() => {});
+      }).catch(() => {});
     }
-  }, 1500);
+
+    // 3. Previous station behind (in case user steps backward)
+    const prev1 = sequentialTarget(stations, graph, index, -1);
+    if (prev1) preload(prev1, false).catch(() => {});
+  }, 80);
 }
 
 function hotspots(station) {
@@ -193,7 +206,22 @@ function finish() {
   // Invalidate map size so newly visible tiles render immediately
   if (map) map.invalidateSize();
 
-  // Schedule debounced preloading of only the single next station
+  // Purge distant scenes from Pannellum to free GPU VRAM and eliminate hitching
+  if (viewer) {
+    const keepScenes = new Set([current.id]);
+    const neighbors = graph.get(current.id) || [];
+    for (const nid of neighbors) keepScenes.add(nid);
+    const cfg = viewer.getConfig();
+    if (cfg && cfg.scenes) {
+      for (const sid of Object.keys(cfg.scenes)) {
+        if (!keepScenes.has(sid)) {
+          viewer.removeScene(sid);
+        }
+      }
+    }
+  }
+
+  // Schedule immediate predictive preloading of adjacent stations
   schedulePreload(current.id);
 }
 
@@ -256,7 +284,7 @@ async function go(target, {initial = false, reset = false, view = null} = {}) {
           autoLoad: true,
           showControls: false,
           compass: false,
-          sceneFadeDuration: matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 180,
+          sceneFadeDuration: 0,
           minHfov: 45,
           maxHfov: 120,
           minPitch: -90,
@@ -377,7 +405,11 @@ function bind() {
   if ($('forward')) $('forward').onclick = () => step(1);
   if ($('home')) $('home').onclick = () => go(byId.get(data.initialView.station_id) || stations[0], {reset: true});
   if ($('retry')) $('retry').onclick = () => go(failed || current || stations[0]);
-  if ($('quality')) $('quality').onchange = () => { preloads.clear(); go(current); };
+  if ($('quality')) $('quality').onchange = e => {
+    localStorage.setItem('pq_quality', e.target.value);
+    preloads.clear();
+    if (current) go(current);
+  };
   if ($('options')) $('options').onclick = () => settings($('settings') ? $('settings').hidden : true);
   if ($('close-settings')) $('close-settings').onclick = () => settings(false);
   if ($('survey')) $('survey').onchange = e => e.target.checked ? surveyLayer.addTo(map) : map.removeLayer(surveyLayer);
@@ -478,6 +510,11 @@ async function boot() {
 
   initMap();
   bind();
+
+  const savedQuality = localStorage.getItem('pq_quality');
+  if (savedQuality && $('quality')) {
+    $('quality').value = savedQuality;
+  }
 
   const params = new URLSearchParams(location.search);
   const requested = params.get('station');
