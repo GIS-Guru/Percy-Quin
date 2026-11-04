@@ -198,7 +198,7 @@ function bind() {
   setInterval(syncMap,80);
 }
 async function boot() {
-  const response=await fetch('data/walkthrough.json');if(!response.ok)throw Error('Catalog unavailable');
+  const response=await fetch('data/walkthrough.json?v='+Date.now());if(!response.ok)throw Error('Catalog unavailable');
   data=await response.json();stations=data.stations;byId=new Map(stations.map(s=>[s.id,s]));graph=buildGraph(stations,data.reviewedLinks);
   initMap();bind();
   const params=new URLSearchParams(location.search), requested=params.get('station');
