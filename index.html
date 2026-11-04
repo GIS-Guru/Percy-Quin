@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>Percy Quin</title>
+  <link rel="stylesheet" href="vendor/leaflet.css"><link rel="stylesheet" href="vendor/pannellum.css"><link rel="stylesheet" href="walkthrough.css">
+</head>
+<body>
+  <main id="panorama" aria-label="360 degree trail panorama"></main>
+  <header class="brand"><span class="eyebrow">EXPLORE AT YOUR OWN PACE</span><h1>Percy Quin</h1></header>
+  <nav class="tools" aria-label="Viewer tools">
+    <button id="home" title="Return to the start" aria-label="Return to the start">⌂</button>
+    <button id="share" title="Share this view" aria-label="Share this view">↗</button>
+    <button id="fullscreen" title="Full screen" aria-label="Full screen">⛶</button>
+    <button id="options" title="Information and settings" aria-label="Information and settings" aria-expanded="false" aria-controls="settings">i</button>
+  </nav>
+  <aside id="settings" hidden aria-label="Information and settings">
+    <div class="panel-title"><h2>Your walk</h2><button id="close-settings" aria-label="Close settings">×</button></div>
+    <p>Drag to look around. Select a ground arrow to walk. Select a point on the map to explore another section.</p>
+    <p>Use W / S or the Back / Forward buttons to step along the recorded route.</p>
+    <label>Picture detail<select id="quality"><option value="4096">Fast</option><option value="8192">High detail</option></select></label>
+    <label class="check"><input type="checkbox" id="survey"> Show surveyed trail</label>
+    <button id="overview">Show the whole trail</button>
+    <details><summary>Image information</summary><p id="image-info"></p></details>
+    <p class="small">Photographed March 2025. Some recorded sections are separated by gaps; use the map to move between them.</p>
+    <label id="share-fallback" hidden>Copy this view’s link<input id="share-url" readonly></label>
+  </aside>
+  <section id="map-panel" aria-label="Trail map">
+    <div class="map-heading"><span>TRAIL MAP</span><div><button id="expand-map" aria-label="Expand map" aria-expanded="false">⤢</button><button id="toggle-map" aria-label="Hide map" aria-expanded="true">−</button></div></div>
+    <div id="map"></div>
+  </section>
+  <div class="walk-controls" aria-label="Walk along the trail"><button id="back" aria-label="Walk back">← <span>Back</span></button><span class="walk-divider"></span><button id="forward" aria-label="Walk forward"><span>Forward</span> →</button></div>
+  <p id="hint">Drag to look around · Follow the arrows to walk</p>
+  <div id="notice" role="status" aria-live="polite" hidden></div>
+  <button id="retry" hidden>Try again</button>
+  <script src="vendor/leaflet.js"></script><script src="vendor/pannellum.js"></script><script type="module" src="walkthrough.js"></script>
+</body>
+</html>

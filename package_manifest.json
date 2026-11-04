@@ -1,0 +1,10 @@
+{
+  "stations": 30,
+  "image_bytes": 285827406,
+  "image_sizes": [
+    4096,
+    8192
+  ],
+  "arcgis_image_storage_bytes": 0,
+  "published": false
+}

@@ -1,0 +1,7 @@
+Percy Quin static preview package
+Serve this folder through HTTP/HTTPS; opening index.html directly is not supported.
+Map imagery needs an internet connection. No Python or source drive is needed on the host.
+Enable HTTPS and allow framing by the intended ArcGIS Experience Builder origin.
+Embed this complete viewer (including its map) with fullscreen and clipboard permissions as appropriate.
+OneDrive is a staging location, not the live HTTP server. This package has not been published.
+This pilot uses conservative capture-order connections; junctions still require visual review.
