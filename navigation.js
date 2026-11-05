@@ -22,24 +22,19 @@ export function arrowBearing(station, target, stations) {
   const d = distance(station, target);
   if (station.segmentId === target.segmentId && stations && Array.isArray(stations)) {
     const isForward = target.seq > station.seq;
-    const step = isForward ? 1 : -1;
-    // When distance is short (< 10m), GPS point jitter creates erratic bearings.
+    // When distance is very short (< 6m), GPS point jitter creates erratic bearings.
     // Look ahead along the trail sequence to follow the true walkway corridor.
-    if (d < 10.0 && Math.abs(target.seq - station.seq) === 1) {
+    if (isForward && d < 6.0 && Math.abs(target.seq - station.seq) === 1) {
       const idx = stations.findIndex(s => s.id === station.id);
       if (idx !== -1) {
         for (let k = 2; k <= 5; k++) {
-          const nextIdx = idx + k * step;
+          const nextIdx = idx + k;
           if (nextIdx >= 0 && nextIdx < stations.length && stations[nextIdx].segmentId === station.segmentId) {
             const candidate = stations[nextIdx];
-            if (distance(station, candidate) >= 12.0) {
+            if (distance(station, candidate) >= 10.0) {
               return bearing(station, candidate);
             }
           }
-        }
-        const prevIdx = idx - step;
-        if (prevIdx >= 0 && prevIdx < stations.length && stations[prevIdx].segmentId === station.segmentId) {
-          return isForward ? bearing(stations[prevIdx], station) : bearing(station, stations[prevIdx]);
         }
       }
     }
@@ -77,7 +72,7 @@ export function sequentialTarget(stations, graph, index, direction) {
   return next && graph.get(stations[index].id).includes(next.id) ? next : null;
 }
 
-// Group only connected captures with exactly the same recorded position. Keep
+// Group captures with identical position or micro-separation (< 1m). Keep
 // every photograph available; do not invent bearings for zero-length steps.
 export function buildNavigation(stations, reviewedLinks = []) {
   const raw = buildGraph(stations, reviewedLinks);
@@ -92,7 +87,7 @@ export function buildNavigation(stations, reviewedLinks = []) {
       members.push(byId.get(id));
       for (const next of raw.get(id)) {
         const b = byId.get(next);
-        if (!groups.has(next) && b.lat === station.lat && b.lon === station.lon) {
+        if (!groups.has(next) && (distance(station, b) < 1.0 || (b.lat === station.lat && b.lon === station.lon))) {
           groups.set(next, members); queue.push(next);
         }
       }
@@ -137,7 +132,6 @@ export function facingTarget(station, graph, byId, azimuth, stations) {
   const candidates = (graph.get(station.id) || []).map(id => byId.get(id))
     .map(target => ({target, angle:Math.abs(wrap(arrowBearing(station, target, stations) - azimuth))}))
     .filter(c => c.angle <= 65).sort((a,b) => a.angle-b.angle);
-  // At a fork with similar bearings, require an explicit ground-arrow choice.
-  if (!candidates.length || (candidates[1] && candidates[1].angle-candidates[0].angle < 20)) return null;
+  if (!candidates.length) return null;
   return candidates[0].target;
 }

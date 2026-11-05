@@ -1,4 +1,4 @@
-import {wrap, distance, bearing, arrowBearing, arrowYaw, buildNavigation, facingTarget} from './navigation.js?v=20261105-align2';
+import {wrap, distance, bearing, arrowBearing, arrowYaw, buildNavigation, facingTarget} from './navigation.js?v=20261105-align3';
 
 const $ = id => document.getElementById(id);
 let data, stations, byId, graph, viewer, map, marker, cone, surveyLayer;
