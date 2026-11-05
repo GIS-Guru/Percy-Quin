@@ -1,4 +1,4 @@
-import {wrap, distance, bearing, buildNavigation, facingTarget} from './navigation.js?v=20261105-trail2';
+import {wrap, distance, bearing, arrowBearing, arrowYaw, buildNavigation, facingTarget} from './navigation.js?v=20261105-align2';
 
 const $ = id => document.getElementById(id);
 let data, stations, byId, graph, viewer, map, marker, cone, surveyLayer;
@@ -26,7 +26,7 @@ function notify(message, duration = 0) {
 }
 
 function forwardTarget() {
-  return current && viewer ? facingTarget(current, graph, byId, current.heading + viewer.getYaw()) : null;
+  return current && viewer ? facingTarget(current, graph, byId, current.heading + viewer.getYaw(), stations) : null;
 }
 
 function controls() {
@@ -44,8 +44,8 @@ function turnAround() {
   const options = graph.get(current.id).map(id => byId.get(id));
   const world = current.heading + viewer.getYaw();
   const target = options.sort((a,b) =>
-    Math.abs(wrap(bearing(current,b)-world))-Math.abs(wrap(bearing(current,a)-world)))[0];
-  viewer.setYaw(target ? wrap(bearing(current,target)-current.heading) : wrap(viewer.getYaw()+180), 450);
+    Math.abs(wrap(arrowBearing(current,b,stations)-world))-Math.abs(wrap(arrowBearing(current,a,stations)-world)))[0];
+  viewer.setYaw(target ? arrowYaw(current, target, stations) : wrap(viewer.getYaw()+180), 450);
   notify('');
 }
 
@@ -105,7 +105,7 @@ function hotspots(station) {
     const label = 'Continue along the trail';
     return {
       id: `walk-${id}`,
-      yaw: wrap(bearing(station, target) - station.heading),
+      yaw: arrowYaw(station, target, stations),
       // Very short capture spacing must not put the walking arrow below the viewport.
       pitch: -Math.min(18, Math.max(8, Math.atan2(data.cameraHeight || 1.95, Math.max(2, d)) * 180 / Math.PI)),
       cssClass: 'ground-arrow',
@@ -277,12 +277,44 @@ async function go(target, {initial = false, reset = false, view = null, back = f
     if (token !== serial) return;
     clearTimeout(loadingTimer);
 
-    const next = byId.get((graph.get(target.id) || [])[0]);
-    const openingDirection = next ? bearing(target, next) : target.heading;
+    // Determine the forward target continuation from target
+    const neighbors = (graph.get(target.id) || []).map(id => byId.get(id)).filter(Boolean);
+    let nextForward = null;
 
-    const world = current && viewer && !reset ? current.heading + viewer.getYaw() : openingDirection;
-    const pitch = view?.pitch ?? (current && viewer && !reset ? viewer.getPitch() : data.initialView.vlookat_deg || -5);
-    const yaw = view?.yaw ?? wrap(world - target.heading);
+    if (current && !reset) {
+      if (back) {
+        // When stepping back, face along the backwards trajectory or maintain trail forward
+        const prevStation = visitHistory.length > 1 ? byId.get(visitHistory.at(-2)) : null;
+        nextForward = prevStation && neighbors.some(n => n.id === prevStation.id)
+          ? prevStation
+          : neighbors.find(n => n.id !== current.id) || current;
+      } else {
+        const incomingMotion = arrowBearing(current, target, stations);
+        const forwardOptions = neighbors.filter(n => n.id !== current.id);
+        if (forwardOptions.length === 1) {
+          nextForward = forwardOptions[0];
+        } else if (forwardOptions.length > 1) {
+          // At a junction/fork, select the path closest to our incoming motion vector
+          nextForward = forwardOptions.sort((a, b) =>
+            Math.abs(wrap(arrowBearing(target, a, stations) - incomingMotion)) -
+            Math.abs(wrap(arrowBearing(target, b, stations) - incomingMotion))
+          )[0];
+        }
+      }
+    } else {
+      // Initial load or direct map jump: pick forward sequential neighbor
+      nextForward = neighbors.find(n => n.seq > target.seq) || neighbors[0];
+    }
+
+    // Centering the next arrow:
+    // If nextForward exists, setting viewer yaw to arrowYaw(target, nextForward, stations)
+    // centers the next directional arrow dead-on in the viewport.
+    const targetYaw = nextForward
+      ? arrowYaw(target, nextForward, stations)
+      : (current ? wrap(arrowBearing(current, target, stations) - target.heading) : 0);
+
+    const yaw = view?.yaw ?? targetYaw;
+    const pitch = view?.pitch ?? (current && viewer && !reset ? Math.max(-10, Math.min(-2, viewer.getPitch())) : -5);
     const hfov = view?.hfov ?? (current && viewer && !reset ? viewer.getHfov() : innerWidth < 600 ? 75 : 105);
 
     if (!viewer) {
@@ -328,10 +360,10 @@ function step(direction) {
     const links = graph.get(current.id);
     notify('Follow an arrow or choose a direction.', 4000);
     const world = current.heading + viewer.getYaw();
-    const ordered = [...links].sort((a,b) => wrap(bearing(current,byId.get(a))-world)-wrap(bearing(current,byId.get(b))-world));
+    const ordered = [...links].sort((a,b) => wrap(arrowBearing(current, byId.get(a), stations) - world) - wrap(arrowBearing(current, byId.get(b), stations) - world));
     $('walk-choices').replaceChildren(...ordered.map((id,index) => {
       const target = byId.get(id), button = document.createElement('button');
-      const angle = wrap(bearing(current,target)-world);
+      const angle = wrap(arrowBearing(current, target, stations) - world);
       button.textContent = Math.abs(angle)>120 ? 'Turn back' : ordered.length>1 ? (index===0 ? 'Take the left path' : index===ordered.length-1 ? 'Take the right path' : 'Continue ahead') : 'Continue along the trail';
       button.onclick = () => go(target);
       return button;
@@ -375,7 +407,7 @@ function initMap() {
     fillOpacity: 1
   }).bindTooltip('Explore here', {direction: 'top', offset: [0, -4]}).on('click', (e) => {
     L.DomEvent.stopPropagation(e);
-    go(s, {reset: false, view: {yaw: wrap((byId.get(graph.get(s.id)[0]) ? bearing(s, byId.get(graph.get(s.id)[0])) : s.heading)-s.heading), pitch:0, hfov:105}});
+    go(s, {reset: false});
   }).addTo(map));
 
   cone = L.polygon([], {color: '#f0c56f', weight: 1, fillOpacity: 0.35, interactive: false}).addTo(map);
