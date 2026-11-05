@@ -1,7 +1,9 @@
-import {wrap, distance, bearing, buildGraph, sequentialTarget} from './navigation.js';
+import {wrap, distance, bearing, buildNavigation, facingTarget} from './navigation.js?v=20261105';
 
 const $ = id => document.getElementById(id);
 let data, stations, byId, graph, viewer, map, marker, cone, surveyLayer;
+let navigation, pendingVisit = null, failedVisit = null;
+const visitHistory = [];
 let current = null, pending = null, busy = false, failed = null, serial = 0;
 let lastAzimuth = null, lastFov = null, noticeTimer, loadStarted, preloadTimer = null;
 const preloads = new Map();
@@ -17,18 +19,35 @@ function notify(message, duration = 0) {
   clearTimeout(noticeTimer);
   const n = $('notice');
   if (!n) return;
+  if ($('walk-choices')) $('walk-choices').hidden = true;
   n.textContent = message;
   n.hidden = !message;
   if (duration) noticeTimer = setTimeout(() => { n.hidden = true; }, duration);
 }
 
+function forwardTarget() {
+  return current && viewer ? facingTarget(current, graph, byId, current.heading + viewer.getYaw()) : null;
+}
+
 function controls() {
-  const i = current ? stations.indexOf(current) : -1;
-  const backBtn = $('back'), fwdBtn = $('forward'), qSelect = $('quality');
-  if (backBtn) backBtn.disabled = busy || i < 0 || !sequentialTarget(stations, graph, i, -1);
-  if (fwdBtn) fwdBtn.disabled = busy || i < 0 || !sequentialTarget(stations, graph, i, 1);
-  if (qSelect) qSelect.disabled = busy;
+  $('back').disabled = busy || !visitHistory.length;
+  // Keep Forward available so a blocked direction can explain how to continue.
+  $('forward').disabled = busy || !current;
+  $('turn-around').disabled = busy || !current;
+  $('quality').disabled = busy;
+  $('section-select').disabled = busy;
+  $('photo-select').disabled = busy;
   document.body.classList.toggle('loading', busy);
+}
+
+function turnAround() {
+  if (!current || busy || !viewer) return;
+  const options = graph.get(current.id).map(id => byId.get(id));
+  const world = current.heading + viewer.getYaw();
+  const target = options.sort((a,b) =>
+    Math.abs(wrap(bearing(current,b)-world))-Math.abs(wrap(bearing(current,a)-world)))[0];
+  viewer.setYaw(target ? wrap(bearing(current,target)-current.heading) : wrap(viewer.getYaw()+180), 450);
+  notify(target ? 'Follow the arrow to continue in this direction.' : 'This is a standalone view. Choose another section from the map or settings.', 4500);
 }
 
 function preload(station, isUserNavigation = false) {
@@ -74,26 +93,8 @@ function preload(station, isUserNavigation = false) {
 
 function schedulePreload(stationId) {
   clearTimeout(preloadTimer);
-  // Immediate predictive preloading: short 80ms microtask ensures the current scene renders first,
-  // then concurrently downloads next 2 forward stations and previous station in the background.
   preloadTimer = setTimeout(() => {
-    const index = current ? stations.indexOf(current) : -1;
-    if (index < 0) return;
-
-    // 1. Next station ahead (highest probability of next click)
-    const next1 = sequentialTarget(stations, graph, index, 1);
-    if (next1) {
-      preload(next1, false).then(() => {
-        // 2. Two stations ahead once next1 is secured
-        const nextIdx = stations.indexOf(next1);
-        const next2 = sequentialTarget(stations, graph, nextIdx, 1);
-        if (next2) preload(next2, false).catch(() => {});
-      }).catch(() => {});
-    }
-
-    // 3. Previous station behind (in case user steps backward)
-    const prev1 = sequentialTarget(stations, graph, index, -1);
-    if (prev1) preload(prev1, false).catch(() => {});
+    for (const id of graph.get(stationId) || []) preload(byId.get(id), false).catch(() => {});
   }, 80);
 }
 
@@ -102,11 +103,12 @@ function hotspots(station) {
     const target = byId.get(id);
     if (!target) return null;
     const d = distance(station, target);
-    const label = target.seq === station.seq + 1 ? 'Walk forward' : target.seq === station.seq - 1 ? 'Walk back' : 'Follow trail branch';
+    const label = `Follow trail to station ${target.take3Num || target.id}`;
     return {
       id: `walk-${id}`,
       yaw: wrap(bearing(station, target) - station.heading),
-      pitch: -Math.atan2(data.cameraHeight || 1.95, Math.max(2, d)) * 180 / Math.PI,
+      // Very short capture spacing must not put the walking arrow below the viewport.
+      pitch: -Math.min(18, Math.max(8, Math.atan2(data.cameraHeight || 1.95, Math.max(2, d)) * 180 / Math.PI)),
       cssClass: 'ground-arrow',
       createTooltipFunc: div => {
         div.innerHTML = '<svg viewBox="0 0 72 44" aria-hidden="true"><path d="M8 32 L36 12 L64 32"/></svg>';
@@ -164,10 +166,15 @@ function syncMap() {
 
 function finish() {
   if (!pending) return;
+  if (pendingVisit?.back) visitHistory.pop();
+  else if (current && current.id !== pending.id) visitHistory.push(current.id);
+  if (pendingVisit?.reset) visitHistory.length = 0;
+  pendingVisit = null;
   current = pending;
   pending = null;
   busy = false;
   failed = null;
+  failedVisit = null;
   if ($('retry')) $('retry').hidden = true;
 
   const panoEl = $('panorama');
@@ -201,7 +208,17 @@ function finish() {
   if ($('share-url')) $('share-url').value = shareUrl();
 
   const links = graph.get(current.id) || [];
-  notify(links.length < 2 ? 'End of this recorded section. Use the map to explore another section.' : '', links.length < 2 ? 6500 : 0);
+  const section = navigation.sectionById.get(current.id);
+  $('section-select').value = String(section.number);
+  $('section-label').textContent = `SECTION ${section.number} OF ${navigation.sections.length}`;
+  const photos = navigation.groups.get(current.id);
+  $('photo-group').hidden = photos.length < 2;
+  $('photo-select').replaceChildren(...photos.map(st => new Option(`Station ${st.take3Num}`, st.id)));
+  $('photo-select').value = current.id;
+  const previousStop = navigation.groups.get(visitHistory.at(-1))?.[0]?.id;
+  notify(!links.length ? 'Standalone view — choose another section from the map or settings.' :
+    current.id === data.initialView.station_id && !visitHistory.length ? 'Start here — follow the arrow to explore.' :
+    links.length === 1 && links[0] === previousStop ? 'Recorded coverage stops here. Turn around to continue back.' : '', 6500);
 
   // Invalidate map size so newly visible tiles render immediately
   if (map) map.invalidateSize();
@@ -229,18 +246,21 @@ function fail(error) {
   console.error(error);
   busy = false;
   failed = pending;
+  failedVisit = pendingVisit;
   pending = null;
+  pendingVisit = null;
   controls();
   if ($('retry')) $('retry').hidden = false;
   notify('This view could not load. Try again or choose another map point.', 6000);
 }
 
-async function go(target, {initial = false, reset = false, view = null} = {}) {
+async function go(target, {initial = false, reset = false, view = null, back = false} = {}) {
   if (!target) return;
-  if (busy && pending === target) return;
+  if (busy) return;
 
   busy = true;
   pending = target;
+  pendingVisit = {back, reset};
   controls();
   if ($('retry')) $('retry').hidden = true;
 
@@ -265,15 +285,11 @@ async function go(target, {initial = false, reset = false, view = null} = {}) {
     if (token !== serial) return;
     clearTimeout(loadingTimer);
 
-    const index = stations.indexOf(target);
-    const next = sequentialTarget(stations, graph, index, 1);
-    const previous = sequentialTarget(stations, graph, index, -1);
-    const openingDirection = target.id === data.initialView.station_id
-      ? target.heading + wrap(data.initialView.hlookat_deg)
-      : next ? bearing(target, next) : previous ? bearing(previous, target) : target.heading;
+    const next = byId.get((graph.get(target.id) || [])[0]);
+    const openingDirection = next ? bearing(target, next) : target.heading;
 
     const world = current && viewer && !reset ? current.heading + viewer.getYaw() : openingDirection;
-    const pitch = view?.pitch ?? (current && viewer && !reset ? viewer.getPitch() : data.initialView.vlookat_deg || 0);
+    const pitch = view?.pitch ?? (current && viewer && !reset ? viewer.getPitch() : data.initialView.vlookat_deg || -5);
     const yaw = view?.yaw ?? wrap(world - target.heading);
     const hfov = view?.hfov ?? (current && viewer && !reset ? viewer.getHfov() : innerWidth < 600 ? 75 : 105);
 
@@ -309,7 +325,25 @@ async function go(target, {initial = false, reset = false, view = null} = {}) {
 
 function step(direction) {
   if (!current || busy) return;
-  go(sequentialTarget(stations, graph, stations.indexOf(current), direction));
+  if (direction < 0) {
+    const previous = byId.get(visitHistory.at(-1));
+    if (previous) go(previous, {back:true});
+    return;
+  }
+  const next = forwardTarget();
+  if (next) go(next);
+  else {
+    const links = graph.get(current.id);
+    notify(links.length ? 'Look toward a trail arrow, turn around, or choose a view below.' :
+      'Standalone view — choose another section from the map or settings.', 5500);
+    $('walk-choices').replaceChildren(...links.map(id => {
+      const target = byId.get(id), button = document.createElement('button');
+      button.textContent = `Toward station ${target.take3Num}`;
+      button.onclick = () => go(target);
+      return button;
+    }));
+    $('walk-choices').hidden = !links.length;
+  }
 }
 
 function initMap() {
@@ -327,7 +361,7 @@ function initMap() {
   L.control.zoom({position: 'bottomright'}).addTo(map);
 
   // Original high-contrast map symbology on satellite imagery
-  L.geoJSON(data.tourLines, {
+  L.geoJSON(navigation.lines, {
     interactive: false,
     style: {color: '#f0d69c', weight: 3, opacity: 0.9}
   }).addTo(map);
@@ -338,16 +372,16 @@ function initMap() {
   });
 
   const renderer = L.canvas({padding: 0.5});
-  stations.forEach(s => L.circleMarker([s.lat, s.lon], {
+  navigation.stops.forEach(s => L.circleMarker([s.lat, s.lon], {
     renderer,
     radius: 4.5,
     color: '#ffffff',
     weight: 1.2,
-    fillColor: '#4c91a2',
+    fillColor: graph.get(s.id).length < 2 ? '#f58220' : '#4c91a2',
     fillOpacity: 1
-  }).bindTooltip(`Station ${s.take3Num || s.id}`, {direction: 'top', offset: [0, -4]}).on('click', (e) => {
+  }).bindTooltip(`Section ${navigation.sectionById.get(s.id).number} · Station ${s.take3Num || s.id}${graph.get(s.id).length < 2 ? " · Coverage boundary" : ""}${navigation.groups.get(s.id).length > 1 ? " · Multiple photos" : ""}`, {direction: 'top', offset: [0, -4]}).on('click', (e) => {
     L.DomEvent.stopPropagation(e);
-    go(s);
+    go(s, {reset: false, view: {yaw: wrap((byId.get(graph.get(s.id)[0]) ? bearing(s, byId.get(graph.get(s.id)[0])) : s.heading)-s.heading), pitch:0, hfov:105}});
   }).addTo(map));
 
   cone = L.polygon([], {color: '#f0c56f', weight: 1, fillOpacity: 0.35, interactive: false}).addTo(map);
@@ -401,10 +435,20 @@ function settings(open) {
 }
 
 function bind() {
+  $('turn-around').onclick = turnAround;
+  $('section-select').replaceChildren(...navigation.sections.map(section => new Option(
+    `Section ${section.number}${section.stops.length === 1 ? ' — standalone view' : ''}`, String(section.number))));
+  $('section-select').onchange = e => {
+    const target = navigation.sections[Number(e.target.value)-1].stops[0];
+    const next = byId.get(graph.get(target.id)[0]);
+    go(target, {view:{yaw:next ? wrap(bearing(target,next)-target.heading) : 0,pitch:0,hfov:105}});
+    settings(false);
+  };
+  $('photo-select').onchange = e => go(byId.get(e.target.value));
   if ($('back')) $('back').onclick = () => step(-1);
   if ($('forward')) $('forward').onclick = () => step(1);
   if ($('home')) $('home').onclick = () => go(byId.get(data.initialView.station_id) || stations[0], {reset: true});
-  if ($('retry')) $('retry').onclick = () => go(failed || current || stations[0]);
+  if ($('retry')) $('retry').onclick = () => go(failed || current || stations[0], failedVisit || {});
   if ($('quality')) $('quality').onchange = e => {
     localStorage.setItem('pq_quality', e.target.value);
     preloads.clear();
@@ -506,7 +550,8 @@ async function boot() {
   data = await response.json();
   stations = data.stations;
   byId = new Map(stations.map(s => [s.id, s]));
-  graph = buildGraph(stations, data.reviewedLinks);
+  navigation = buildNavigation(stations, data.reviewedLinks);
+  graph = navigation.graph;
 
   initMap();
   bind();

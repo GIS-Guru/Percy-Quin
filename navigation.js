@@ -30,3 +30,68 @@ export function sequentialTarget(stations, graph, index, direction) {
   const next = stations[index + direction];
   return next && graph.get(stations[index].id).includes(next.id) ? next : null;
 }
+
+// Group only connected captures with exactly the same recorded position. Keep
+// every photograph available; do not invent bearings for zero-length steps.
+export function buildNavigation(stations, reviewedLinks = []) {
+  const raw = buildGraph(stations, reviewedLinks);
+  const byId = new Map(stations.map(s => [s.id, s]));
+  const groups = new Map(), stops = [];
+  for (const station of stations) {
+    if (groups.has(station.id)) continue;
+    const members = [], queue = [station.id];
+    groups.set(station.id, members);
+    while (queue.length) {
+      const id = queue.pop();
+      members.push(byId.get(id));
+      for (const next of raw.get(id)) {
+        const b = byId.get(next);
+        if (!groups.has(next) && b.lat === station.lat && b.lon === station.lon) {
+          groups.set(next, members); queue.push(next);
+        }
+      }
+    }
+    members.sort((a,b) => a.seq-b.seq);
+    stops.push(members[0]);
+  }
+  const graph = new Map();
+  for (const station of stations) {
+    const members = groups.get(station.id), targets = new Set();
+    for (const member of members) for (const id of raw.get(member.id)) {
+      if (groups.get(id) !== members) targets.add(groups.get(id)[0].id);
+    }
+    graph.set(station.id, [...targets]);
+  }
+  const sectionById = new Map(), sections = [];
+  for (const stop of stops) {
+    if (sectionById.has(stop.id)) continue;
+    const section = {number: sections.length+1, stops: []}, queue = [stop.id];
+    sectionById.set(stop.id, section);
+    while (queue.length) {
+      const id = queue.pop();
+      section.stops.push(byId.get(id));
+      for (const member of groups.get(id)) sectionById.set(member.id, section);
+      for (const next of graph.get(id)) if (!sectionById.has(next)) {
+        sectionById.set(next, section); queue.push(next);
+      }
+    }
+    sections.push(section);
+  }
+  const features = [];
+  for (const a of stops) for (const id of graph.get(a.id)) if (a.id < id) {
+    const b = byId.get(id);
+    features.push({type:'Feature', properties:{from:a.id,to:id},
+      geometry:{type:'LineString',coordinates:[[a.lon,a.lat],[b.lon,b.lat]]}});
+  }
+  return {graph, groups, stops, sections, sectionById,
+    lines:{type:'FeatureCollection',features}};
+}
+
+export function facingTarget(station, graph, byId, azimuth) {
+  const candidates = (graph.get(station.id) || []).map(id => byId.get(id))
+    .map(target => ({target, angle:Math.abs(wrap(bearing(station,target)-azimuth))}))
+    .filter(c => c.angle <= 65).sort((a,b) => a.angle-b.angle);
+  // At a fork with similar bearings, require an explicit ground-arrow choice.
+  if (!candidates.length || (candidates[1] && candidates[1].angle-candidates[0].angle < 20)) return null;
+  return candidates[0].target;
+}

@@ -9,7 +9,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Segoe+UI:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="vendor/leaflet.css">
   <link rel="stylesheet" href="vendor/pannellum.css">
-  <link rel="stylesheet" href="walkthrough.css">
+  <link rel="stylesheet" href="walkthrough.css?v=20261105">
 </head>
 <body>
   <main id="panorama" aria-label="360 degree trail panorama"></main>
@@ -36,7 +36,10 @@
       <h2>Settings</h2>
       <button id="close-settings" aria-label="Close settings">×</button>
     </div>
-    <p class="settings-hint">Drag to look around &bull; Use arrows, W/S keys, or map to navigate.</p>
+    <p class="settings-hint">Drag to look around. Forward follows the direction you face; Back returns to your previous view. Use W/S or the ground arrows to walk.</p>
+    <label>Explore section<select id="section-select"></select></label>
+    <label id="photo-group" hidden>Photos at this recorded position<select id="photo-select"></select></label>
+    <p class="settings-hint">Gold lines show connected walking views. Orange points mark recorded coverage boundaries, not necessarily trail endings. Photographs sharing a GPS position are grouped without changing their coordinates.</p>
     <label>Detail
       <select id="quality">
         <option value="2048" selected>Fast (2K HD)</option>
@@ -54,7 +57,7 @@
 
   <section id="map-panel" aria-label="Trail map">
     <div class="map-heading">
-      <span>TRAIL MAP</span>
+      <span id="section-label">TRAIL MAP</span>
       <div>
         <button id="expand-map" aria-label="Expand map" aria-expanded="false">⤢</button>
         <button id="toggle-map" aria-label="Hide map" aria-expanded="true">−</button>
@@ -64,17 +67,19 @@
   </section>
 
   <div class="walk-controls" aria-label="Walk along the trail">
-    <button id="back" aria-label="Walk back">← <span>Back</span></button>
+    <button id="back" aria-label="Return to previous view">← <span>Back</span></button>
+    <button id="turn-around" aria-label="Turn around" title="Turn around">↶ <span>Turn around</span></button>
     <span class="walk-divider"></span>
     <button id="forward" aria-label="Walk forward"><span>Forward</span> →</button>
   </div>
 
   <p id="hint">Drag to look around · Follow the arrows to walk</p>
   <div id="notice" role="status" aria-live="polite" hidden></div>
+  <div id="walk-choices" aria-label="Choose a walking direction" hidden></div>
   <button id="retry" hidden>Try again</button>
 
   <script src="vendor/leaflet.js"></script>
   <script src="vendor/pannellum.js"></script>
-  <script type="module" src="walkthrough.js"></script>
+  <script type="module" src="walkthrough.js?v=20261105"></script>
 </body>
 </html>
