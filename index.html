@@ -83,8 +83,13 @@
   <div id="walk-choices" aria-label="Choose a walking direction" hidden></div>
   <button id="retry" hidden>Try again</button>
 
+    <div id="capture-stamp" class="capture-stamp" aria-label="Photo capture information">
+    <div class="stamp-pill"><span class="stamp-label">Image capture:</span> <span id="stamp-capture-val">--</span></div>
+    <div class="stamp-pill"><span class="stamp-label">Lat/Lon:</span> <span id="stamp-coords-val">--</span></div>
+  </div>
+
   <script src="vendor/leaflet.js"></script>
   <script src="vendor/pannellum.js"></script>
-  <script type="module" src="walkthrough.js?v=20261105-pqcentered"></script>
+  <script type="module" src="walkthrough.js?v=20261105-stamp"></script>
 </body>
 </html>

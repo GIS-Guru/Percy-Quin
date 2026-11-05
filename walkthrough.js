@@ -197,6 +197,7 @@ function finish() {
   if ($('image-info')) {
     $('image-info').textContent = `${current.id} · ${current.lat.toFixed(6)}, ${current.lon.toFixed(6)} · ${current.date.slice(0, 10)}`;
   }
+  updateCaptureStamp(current);
 
   const url = new URL(location.href);
   url.searchParams.set('station', current.id);
@@ -253,6 +254,7 @@ async function go(target, {initial = false, reset = false, view = null, back = f
   busy = true;
   pending = target;
   pendingVisit = {back, reset};
+  updateCaptureStamp(target);
   controls();
   if ($('retry')) $('retry').hidden = true;
 
@@ -609,3 +611,42 @@ boot().catch(error => {
   console.error(error);
   notify('The walkthrough could not start. Please refresh.');
 });
+
+
+function updateCaptureStamp(st) {
+  if (!st) return;
+  const capVal = $('stamp-capture-val');
+  const coordVal = $('stamp-coords-val');
+  if (!capVal || !coordVal) return;
+
+  let dateStr = '';
+  const rawDate = st.date || st.exifDate || '';
+  const m = rawDate.match(/^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})/);
+  if (m) {
+    const yr = m[1].slice(-2);
+    const mo = parseInt(m[2], 10);
+    const day = parseInt(m[3], 10);
+    let hr = parseInt(m[4], 10);
+    const min = m[5];
+    const ampm = hr >= 12 ? 'PM' : 'AM';
+    hr = hr % 12 || 12;
+    dateStr = `${mo}/${day}/${yr}, ${hr}:${min} ${ampm}`;
+  } else if (rawDate) {
+    try {
+      const d = new Date(rawDate.includes('T') ? rawDate : rawDate.replace(' ', 'T'));
+      if (!isNaN(d.getTime())) {
+        const mo = d.getMonth() + 1;
+        const day = d.getDate();
+        const yr = String(d.getFullYear()).slice(-2);
+        let hr = d.getHours();
+        const min = String(d.getMinutes()).padStart(2, '0');
+        const ampm = hr >= 12 ? 'PM' : 'AM';
+        hr = hr % 12 || 12;
+        dateStr = `${mo}/${day}/${yr}, ${hr}:${min} ${ampm}`;
+      }
+    } catch (e) {}
+  }
+
+  capVal.textContent = dateStr || 'Unknown';
+  coordVal.textContent = `${Number(st.lat).toFixed(6)} ${Number(st.lon).toFixed(6)}`;
+}
