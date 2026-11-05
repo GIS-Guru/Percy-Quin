@@ -22,7 +22,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Segoe+UI:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="vendor/leaflet.css">
   <link rel="stylesheet" href="vendor/pannellum.css">
-  <link rel="stylesheet" href="walkthrough.css?v=20261105-pqcentered">
+  <link rel="stylesheet" href="walkthrough.css?v=20261105-continuous">
 </head>
 <body>
   <main id="panorama" aria-label="360 degree trail panorama"></main>
@@ -68,12 +68,6 @@
         <button id="toggle-map" aria-label="Hide map" aria-expanded="true">−</button>
       </div>
     </div>
-    <div id="map-datasets" class="map-datasets-bar" role="toolbar" aria-label="Dataset selector">
-      <button class="ds-pill active" id="btn-ds-tour" title="Jump to Tour Route"><span class="ds-dot" style="background:#f0d69c"></span> Tour (504)</button>
-      <button class="ds-pill" id="btn-ds-deb" title="Jump to DebrisTech 360 Stations (3/12/25)"><span class="ds-dot" style="background:#00E5FF"></span> DebrisTech (24)</button>
-      <button class="ds-pill" id="btn-ds-pq401" title="Jump to PQ 4/01/25 Stations (4/01/25)"><span class="ds-dot" style="background:#FF9100"></span> 4/01/25 (20)</button>
-      <button class="ds-pill" id="btn-ds-all" title="Toggle background stations across all folders"><span class="ds-dot" style="background:#00E676"></span> All Surveys</button>
-    </div>
     <div id="map"></div>
   </section>
 
@@ -96,6 +90,6 @@
 
   <script src="vendor/leaflet.js"></script>
   <script src="vendor/pannellum.js"></script>
-  <script type="module" src="walkthrough.js?v=20261105-datasets"></script>
+  <script type="module" src="walkthrough.js?v=20261105-continuous"></script>
 </body>
 </html>

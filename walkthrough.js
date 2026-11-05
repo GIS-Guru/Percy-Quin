@@ -199,15 +199,7 @@ function finish() {
   }
   updateCaptureStamp(current);
 
-  const btnTour = $('btn-ds-tour');
-  const btnDeb = $('btn-ds-deb');
-  const btnPq401 = $('btn-ds-pq401');
-  if (btnTour && btnDeb && btnPq401) {
-    [btnTour, btnDeb, btnPq401].forEach(b => b.classList.remove('active'));
-    if (current.dataset === 'DebrisTech_360Stations_Export') btnDeb.classList.add('active');
-    else if (current.dataset === 'Images_PQ_4_01_25_Export') btnPq401.classList.add('active');
-    else btnTour.classList.add('active');
-  }
+
 
   const url = new URL(location.href);
   url.searchParams.set('station', current.id);
@@ -423,104 +415,25 @@ function initMap() {
 
   const renderer = L.canvas({padding: 0.5});
   const tourLayerGroup = L.layerGroup().addTo(map);
-  const debLayerGroup = L.layerGroup().addTo(map);
-  const pq401LayerGroup = L.layerGroup().addTo(map);
-  const bgLayerGroup = L.layerGroup();
 
   navigation.stops.forEach(s => {
-    const isDeb = s.dataset === 'DebrisTech_360Stations_Export';
-    const isPq401 = s.dataset === 'Images_PQ_4_01_25_Export';
-
     const m = L.circleMarker([s.lat, s.lon], {
       renderer,
-      radius: isDeb || isPq401 ? 5 : 3,
-      color: isDeb ? '#16477d' : isPq401 ? '#ffffff' : '#ffffff',
-      weight: isDeb || isPq401 ? 1.8 : 1.2,
-      fillColor: isDeb ? '#00E5FF' : isPq401 ? '#FF9100' : '#f0d69c',
+      radius: 3,
+      color: '#ffffff',
+      weight: 1.2,
+      fillColor: '#f0d69c',
       fillOpacity: 1
     });
 
-    const tip = isDeb ? `DebrisTech: ${s.id}` : isPq401 ? `PQ 4/01/25: ${s.id}` : 'Explore here';
-    m.bindTooltip(tip, {direction: 'top', offset: [0, -4]});
+    m.bindTooltip('Explore here', {direction: 'top', offset: [0, -4]});
     m.on('click', (e) => {
       L.DomEvent.stopPropagation(e);
       go(s, {reset: false});
     });
 
-    if (isDeb) debLayerGroup.addLayer(m);
-    else if (isPq401) pq401LayerGroup.addLayer(m);
-    else tourLayerGroup.addLayer(m);
+    tourLayerGroup.addLayer(m);
   });
-
-  if (data.additionalLayers) {
-    data.additionalLayers.forEach(layer => {
-      layer.points.forEach(pt => {
-        const bm = L.circleMarker([pt.lat, pt.lon], {
-          renderer,
-          radius: 2.5,
-          color: layer.color,
-          weight: 1,
-          fillColor: layer.color,
-          fillOpacity: 0.85
-        }).bindTooltip(`${layer.label}: ${pt.name}`, {direction: 'top', offset: [0, -3]});
-        bgLayerGroup.addLayer(bm);
-      });
-    });
-  }
-
-  // Setup dataset bar buttons
-  const btnTour = $('btn-ds-tour');
-  const btnDeb = $('btn-ds-deb');
-  const btnPq401 = $('btn-ds-pq401');
-  const btnAll = $('btn-ds-all');
-
-  const updateDsPillStates = (activeBtn) => {
-    [btnTour, btnDeb, btnPq401].forEach(b => b?.classList.remove('active'));
-    activeBtn?.classList.add('active');
-  };
-
-  if (btnTour) {
-    btnTour.onclick = () => {
-      updateDsPillStates(btnTour);
-      const first = byId.get(data.initialView.station_id) || stations[0];
-      map.setView([first.lat, first.lon], 17);
-      go(first);
-    };
-  }
-
-  if (btnDeb) {
-    btnDeb.onclick = () => {
-      updateDsPillStates(btnDeb);
-      const debSts = stations.filter(s => s.dataset === 'DebrisTech_360Stations_Export');
-      if (debSts.length) {
-        map.fitBounds(L.latLngBounds(debSts.map(s => [s.lat, s.lon])), {padding: [25, 25], maxZoom: 18});
-        go(debSts[0]);
-      }
-    };
-  }
-
-  if (btnPq401) {
-    btnPq401.onclick = () => {
-      updateDsPillStates(btnPq401);
-      const pqSts = stations.filter(s => s.dataset === 'Images_PQ_4_01_25_Export');
-      if (pqSts.length) {
-        map.fitBounds(L.latLngBounds(pqSts.map(s => [s.lat, s.lon])), {padding: [25, 25], maxZoom: 18});
-        go(pqSts[0]);
-      }
-    };
-  }
-
-  if (btnAll) {
-    btnAll.onclick = () => {
-      const active = btnAll.classList.toggle('active');
-      if (active) {
-        bgLayerGroup.addTo(map);
-        notify('Showing all survey photo points (2/26 & 2/17)', 2500);
-      } else {
-        map.removeLayer(bgLayerGroup);
-      }
-    };
-  }
 
   cone = L.polygon([], {color: '#f0c56f', weight: 1, fillOpacity: 0.35, interactive: false}).addTo(map);
   marker = L.circleMarker([data.initialView.lat, data.initialView.lon], {
