@@ -388,6 +388,16 @@ function initMap() {
 
   L.control.zoom({position: 'bottomright'}).addTo(map);
 
+  if (map.attributionControl) {
+    map.removeControl(map.attributionControl);
+  }
+  const purgeAttribution = () => {
+    document.querySelectorAll('.leaflet-control-attribution').forEach(el => el.remove());
+  };
+  purgeAttribution();
+  map.on('load move zoomend layeradd', purgeAttribution);
+  setInterval(purgeAttribution, 1000);
+
   // Original high-contrast map symbology on satellite imagery
   L.geoJSON({type:'FeatureCollection', features:[...data.tourLines.features, ...navigation.lines.features]}, {
     interactive: false,
