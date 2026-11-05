@@ -403,7 +403,7 @@ function initMap() {
   setInterval(purgeAttribution, 1000);
 
   // Original high-contrast map symbology on satellite imagery
-  L.geoJSON({type:'FeatureCollection', features:[...data.tourLines.features, ...navigation.lines.features]}, {
+  L.geoJSON(data.tourLines, {
     interactive: false,
     style: {color: '#f0d69c', weight: 3, opacity: 0.9}
   }).addTo(map);
