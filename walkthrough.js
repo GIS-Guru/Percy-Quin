@@ -292,7 +292,7 @@ async function go(target, {initial = false, reset = false, view = null, back = f
           autoLoad: true,
           showControls: false,
           compass: false,
-          sceneFadeDuration: matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 180,
+          sceneFadeDuration: 0,
           minHfov: 45,
           maxHfov: 120,
           minPitch: -90,
