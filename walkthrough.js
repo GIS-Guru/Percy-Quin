@@ -1,4 +1,4 @@
-import {wrap, distance, bearing, arrowBearing, arrowYaw, buildNavigation, facingTarget} from './navigation.js?v=20261105-align3';
+import {wrap, distance, bearing, arrowBearing, arrowYaw, buildNavigation, facingTarget} from './navigation.js?v=20261105-mapcenter';
 
 const $ = id => document.getElementById(id);
 let data, stations, byId, graph, viewer, map, marker, cone, surveyLayer;
@@ -186,8 +186,8 @@ function finish() {
     marker.setLatLng([current.lat, current.lon]);
     marker.bringToFront();
   }
-  if (map && marker && !map.getBounds().pad(-0.1).contains(marker.getLatLng())) {
-    map.panTo(marker.getLatLng(), {animate: true});
+  if (map) {
+    map.panTo([current.lat, current.lon], {animate: true, duration: 0.25});
   }
 
   lastAzimuth = null;
@@ -262,7 +262,9 @@ async function go(target, {initial = false, reset = false, view = null, back = f
     marker.bringToFront();
   }
   if (map) {
-    if (!map.getBounds().pad(-0.1).contains([target.lat, target.lon])) {
+    if (initial || reset) {
+      map.setView([target.lat, target.lon], map.getZoom() || 17);
+    } else {
       map.panTo([target.lat, target.lon], {animate: true, duration: 0.35});
     }
   }
