@@ -375,12 +375,12 @@ function step(direction) {
 }
 
 function initMap() {
-  map = L.map('map', {zoomControl: false, attributionControl: true}).setView([data.initialView.lat, data.initialView.lon], 17);
+  map = L.map('map', {zoomControl: false, attributionControl: false}).setView([data.initialView.lat, data.initialView.lon], 17);
 
   L.tileLayer('https://services.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
     maxNativeZoom: 19,
     maxZoom: 21,
-    attribution: 'Tiles © Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community',
+    attribution: '',
     keepBuffer: 4,
     updateWhenIdle: false,
     updateWhenZooming: false

@@ -9,7 +9,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Segoe+UI:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="vendor/leaflet.css">
   <link rel="stylesheet" href="vendor/pannellum.css">
-  <link rel="stylesheet" href="walkthrough.css?v=20261105-trail2">
+  <link rel="stylesheet" href="walkthrough.css?v=20261105-cleanmap">
 </head>
 <body>
   <main id="panorama" aria-label="360 degree trail panorama"></main>
@@ -47,6 +47,7 @@
     <label class="check"><input type="checkbox" id="survey"> Show surveyed trail</label>
     <button id="overview">Show full trail</button>
     <label id="share-fallback" hidden>Share view link<input id="share-url" readonly></label>
+    <p class="settings-hint" style="margin-top: 1rem; font-size: 0.75rem; opacity: 0.7;">Imagery &copy; Esri, Maxar, Earthstar Geographics &middot; Map engine powered by Leaflet</p>
   </aside>
 
   <section id="map-panel" aria-label="Trail map">
@@ -74,6 +75,6 @@
 
   <script src="vendor/leaflet.js"></script>
   <script src="vendor/pannellum.js"></script>
-  <script type="module" src="walkthrough.js?v=20261105-mapcenter"></script>
+  <script type="module" src="walkthrough.js?v=20261105-cleanmap"></script>
 </body>
 </html>

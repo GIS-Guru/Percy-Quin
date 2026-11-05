@@ -237,7 +237,11 @@ body:before {
 }
 
 .leaflet-control-attribution {
-  font-size: 9px !important;
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  height: 0 !important;
+  pointer-events: none !important;
 }
 
 .leaflet-tooltip {
